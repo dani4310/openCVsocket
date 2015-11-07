@@ -21,7 +21,7 @@ void error(const char *msg)
 char *itoa(int num, char *str, int radix);
 int main(int argc, char *argv[])
 {
-    int sockfd, portno, n;
+    int sockfd, portno, n, cameradevice;
     struct sockaddr_in serv_addr;
     struct hostent *server;
     double width,height,realwidth,realheight;
@@ -29,15 +29,15 @@ int main(int argc, char *argv[])
     char videomessage[30]="";
     char numberbuf[10];
 
-    if (argc < 3) {
-        printf("Usage: ./CVclient <server ip> <server port> <video width> <video hight\n");
+    if (argc < 4) {
+        printf("Usage: ./CVclient <server ip> <server port> <video width> <video hight> <camera device>\n");
         exit(0);
     }
 
 
     width = (double)atoi(argv[3]);
     height = (double)atoi(argv[4]);
-
+    cameradevice = atoi(argv[5]);
     portno = atoi(argv[2]);
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) 
@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
     if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0) 
         error("ERROR connecting");
 
-    VideoCapture cap(0);  
+    VideoCapture cap(cameradevice);  
     if(!cap.isOpened())  
     {  
         printf("error");
@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
          error("ERROR writing to socket");
 
  
-    waitKey(30);
+    waitKey(15);
     }
         close(sockfd);
     return 0;

@@ -9,7 +9,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <iostream>
-
+// #include <sys/wait.h>
 using namespace cv;
 using namespace std;
 
@@ -21,16 +21,15 @@ void error(const char *msg)
 
 int main(int argc, char *argv[])
 {
-     int sockfd, newsockfd, portno, width, height;
+     int sockfd, newsockfd, portno, width, height, childpid;
      socklen_t clilen;
-     char buffer[1024];
      char messagerec[30] = "";
      char *mesptr = messagerec;
      struct sockaddr_in serv_addr, cli_addr;
      int n;
 
 
-
+    // startWindowThread();
      if (argc < 2) {
          printf("Usage: ./CVserver <server port>\n");
          exit(1);
@@ -47,56 +46,77 @@ int main(int argc, char *argv[])
               sizeof(serv_addr)) < 0) 
               error("ERROR on binding");
      listen(sockfd,5);
-     clilen = sizeof(cli_addr);
-     newsockfd = accept(sockfd, 
-                 (struct sockaddr *) &cli_addr, 
-                 &clilen);
-     if (newsockfd < 0) 
-          error("ERROR on accept");
-     bzero(buffer,1024);
+     for(;;){
+         clilen = sizeof(cli_addr);
+         newsockfd = accept(sockfd, 
+                     (struct sockaddr *) &cli_addr, 
+                     &clilen);
+        if (newsockfd < 0) 
+              error("ERROR on accept");
+        if((childpid = fork()) < 0)
+            error("server:fork error");
+        else if(childpid == 0){//child
+            char c;
+            while(1){
+                if ( read(newsockfd, &c, 1) == 1) {
+                     *mesptr ++=c;
+                     if (c == ']')
+                        break;
+                } 
+            }
+            mesptr++;
+            *mesptr = '\0';
+            width = atoi(strtok(messagerec, "|"));
+            height = atoi(strtok(NULL,"]"));
 
-     char c;
-    while(1){
-        if ( read(newsockfd, &c, 1) == 1) {
-             *mesptr ++=c;
-             if (c == ']')
-                break;
-        } 
-    }
-    mesptr++;
-    *mesptr = '\0';
-    width = atoi(strtok(messagerec, "|"));
-    height = atoi(strtok(NULL,"]"));
 
 
+            Mat  img = Mat::zeros( height,width, CV_8UC3);
+            int  imgSize = img.total()*img.elemSize();
+            char sockData[imgSize];
+            int bytes;
+         //Receive data here
+            while(1){
+               for (int i = 0; i < imgSize; i += bytes) {
+                    if ((bytes = recv(newsockfd, sockData +i, imgSize  - i, 0)) == -1) {
+                        printf("recv failed\n");
+                    }
+                    if(bytes == 0){
+                        printf("client colse\n");
+                        waitKey(1);
+                        destroyWindow("Server");
+                        waitKey(1);
+                        printf("destoryed\n");
+                        close(newsockfd);
+                        close(sockfd);
+                        printf("close fininsh\n");
+                        exit(0);
+                    }
+               }
 
-    Mat  img = Mat::zeros( height,width, CV_8UC3);
-    int  imgSize = img.total()*img.elemSize();
-    char sockData[imgSize];
-    int bytes;
- //Receive data here
-while(1){
-   for (int i = 0; i < imgSize; i += bytes) {
-        if ((bytes = recv(newsockfd, sockData +i, imgSize  - i, 0)) == -1) {
-            printf("recv failed\n");
+             // Assign pixel value to img
+
+             int ptr=0;
+                for (int i = 0;  i < img.rows; i++) {
+                    for (int j = 0; j < img.cols; j++) {                                     
+                        img.at<cv::Vec3b>(i,j) = cv::Vec3b(sockData[ptr+ 0],sockData[ptr+1],sockData[ptr+2]);
+                        ptr=ptr+3;
+                    }
+                }
+
+                 namedWindow( "Server", CV_WINDOW_AUTOSIZE );// Create a window for display.
+                 imshow( "Server", img );  
+                 waitKey(5);
+             }
+            close(newsockfd);
+            close(sockfd);
+            exit(0); 
         }
-   }
+        //parent
+        close(newsockfd);
+                  //     while(wait((int*)0)!=childpid)
+                  // ;
 
- // Assign pixel value to img
-
- int ptr=0;
-    for (int i = 0;  i < img.rows; i++) {
-        for (int j = 0; j < img.cols; j++) {                                     
-            img.at<cv::Vec3b>(i,j) = cv::Vec3b(sockData[ptr+ 0],sockData[ptr+1],sockData[ptr+2]);
-            ptr=ptr+3;
-        }
+    
     }
-
-     namedWindow( "Server", CV_WINDOW_AUTOSIZE );// Create a window for display.
-     imshow( "Server", img );  
-     waitKey(30);
- }
-    close(newsockfd);
-    close(sockfd);
-     return 0; 
 }
